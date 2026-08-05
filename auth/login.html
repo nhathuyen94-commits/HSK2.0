@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Đăng nhập — UZHOU Hán Ngữ</title>
+<style>
+body{font-family:Arial,sans-serif;background:#fff0f7;display:grid;place-items:center;min-height:100vh;margin:0}
+.card{width:min(420px,92vw);background:#fff;padding:28px;border-radius:20px;box-shadow:0 15px 45px #d33a7a22}
+h1{margin-top:0;color:#7d2457}input,button{width:100%;padding:13px;margin:7px 0;border-radius:10px;box-sizing:border-box}
+input{border:1px solid #ddd}button{border:0;background:#e83f91;color:#fff;font-weight:700;cursor:pointer}
+#msg{min-height:24px;color:#b42355}
+.small{font-size:13px;color:#666}
+</style>
+
+<script src="/supabase-config.js"></script>
+<script src="/auth/access-control.js"></script>
+</head>
+<body>
+<div class="card">
+<h1>UZHOU Hán Ngữ</h1>
+<p>Đăng nhập để vào khu vực học tập.</p>
+<form id="loginForm">
+<input id="email" type="email" placeholder="Email" required>
+<input id="password" type="password" placeholder="Mật khẩu" required>
+<button>Đăng nhập</button>
+</form>
+<p id="msg"></p>
+<p class="small">Tài khoản học viên sẽ được cấp quyền khóa học từ hệ thống quản trị.</p>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../supabase-config.js"></script>
+<script>
+const client = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+document.getElementById('loginForm').addEventListener('submit', async e=>{
+  e.preventDefault();
+  const msg=document.getElementById('msg');
+  msg.textContent='Đang đăng nhập...';
+  const {error}=await client.auth.signInWithPassword({
+    email:document.getElementById('email').value.trim(),
+    password:document.getElementById('password').value
+  });
+  if(error){msg.textContent='Đăng nhập thất bại: '+error.message;return;}
+  location.href='../dashboard.html';
+});
+</script>
+</body>
+</html>

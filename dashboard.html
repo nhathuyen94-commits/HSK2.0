@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Khu vực học tập — UZHOU</title>
+<style>
+body{font-family:Arial,sans-serif;background:#fff4f9;margin:0;color:#4a2440}
+header{padding:18px 5%;background:#fff;border-bottom:1px solid #f1cddd;display:flex;justify-content:space-between;gap:12px}
+main{width:min(1000px,90%);margin:35px auto}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:18px}
+.card{background:#fff;padding:22px;border-radius:18px;box-shadow:0 10px 30px #b21d6015}.locked{opacity:.5}
+button{border:0;border-radius:10px;padding:10px 14px;background:#e83f91;color:white;font-weight:700;cursor:pointer}
+a{text-decoration:none;color:inherit}
+</style>
+
+<script src="/supabase-config.js"></script>
+<script src="/auth/access-control.js"></script>
+</head>
+<body>
+<header><strong>UZHOU Hán Ngữ</strong><button id="logout">Đăng xuất</button></header>
+<main>
+<h1>Khu vực học tập</h1>
+<p id="user"></p>
+<div id="courses" class="grid"></div>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
+<script>
+const client=window.supabase.createClient(window.SUPABASE_URL,window.SUPABASE_ANON_KEY);
+const courses=[
+ {id:'hsk1',name:'HSK 1',url:'index.html'},
+ {id:'hsk2',name:'HSK 2',url:'index.html'},
+ {id:'hsk3',name:'HSK 3',url:'index.html'},
+ {id:'hsk4',name:'HSK 4',url:'index.html'}
+];
+async function init(){
+ const {data:{user}}=await client.auth.getUser();
+ if(!user){location.href='auth/login.html';return;}
+ document.getElementById('user').textContent='Tài khoản: '+user.email;
+ const {data:access}=await client.from('user_courses').select('course_id,expires_at').eq('user_id',user.id);
+ const allowed=new Map((access||[]).map(x=>[x.course_id,x]));
+ document.getElementById('courses').innerHTML=courses.map(c=>{
+   const a=allowed.get(c.id);
+   const active=a && (!a.expires_at || new Date(a.expires_at)>new Date());
+   return `<div class="card ${active?'':'locked'}">
+      <h2>${c.name}</h2>
+      <p>${active?'Bạn được cấp quyền học khóa này.':'Chưa được cấp quyền.'}</p>
+      ${active?`<a href="${c.url}"><button>Vào học</button></a>`:'🔒'}
+   </div>`;
+ }).join('');
+}
+document.getElementById('logout').onclick=async()=>{await client.auth.signOut();location.href='auth/login.html'};
+init();
+</script>
+</body>
+</html>

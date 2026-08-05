@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Quản trị học viên — UZHOU</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/supabase-config.js"></script>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#fff5fa;color:#45243a}
+header{background:#fff;padding:18px 5%;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #f0d4e2}
+main{width:min(1050px,92%);margin:30px auto}.card{background:#fff;border-radius:18px;padding:22px;margin-bottom:18px;box-shadow:0 10px 30px #9d245815}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:end}.field{flex:1;min-width:210px}label{display:block;font-size:13px;font-weight:700;margin-bottom:6px}
+input,select{width:100%;padding:12px;border:1px solid #ddd;border-radius:10px;background:#fff}
+button{border:0;border-radius:10px;padding:11px 15px;font-weight:700;cursor:pointer;background:#e83f91;color:white}
+button.secondary{background:#eee;color:#45243a}button.danger{background:#b42318}button:disabled{opacity:.5}
+#msg{min-height:24px;margin-top:12px;font-weight:600}.small{font-size:13px;color:#777}
+table{width:100%;border-collapse:collapse;margin-top:14px}th,td{padding:11px;border-bottom:1px solid #eee;text-align:left;vertical-align:middle}
+.badge{display:inline-block;padding:5px 8px;border-radius:999px;font-size:12px;font-weight:700}.ok{background:#e7f7ed;color:#147a3d}.no{background:#f2f2f2;color:#777}
+@media(max-width:700px){table{font-size:13px}th,td{padding:8px}}
+</style>
+</head>
+<body>
+<header><strong>UZHOU Hán Ngữ — QUẢN TRỊ</strong><button class="secondary" id="logout">Đăng xuất</button></header>
+<main>
+<div class="card">
+<h1>Quản lý học viên</h1>
+<p class="small">Học viên phải có tài khoản trên hệ thống trước khi được cấp khóa.</p>
+<div class="row">
+<div class="field"><label>Email học viên</label><input id="email" type="email" placeholder="student@gmail.com"></div>
+<div class="field"><label>Khóa học</label><select id="course">
+<option value="hsk1">HSK 1</option><option value="hsk2">HSK 2</option><option value="hsk3">HSK 3</option><option value="hsk4">HSK 4</option>
+</select></div>
+<div class="field"><label>Ngày hết hạn (bỏ trống = không hết hạn)</label><input id="expires" type="date"></div>
+<button id="grant">Cấp quyền</button>
+</div><div id="msg"></div>
+</div>
+<div class="card">
+<h2>Danh sách quyền đã cấp</h2><button class="secondary" id="refresh">Làm mới</button>
+<div style="overflow:auto"><table><thead><tr><th>Email</th><th>Khóa</th><th>Hạn</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody id="rows"><tr><td colspan="5">Đang tải...</td></tr></tbody></table></div>
+</div>
+</main>
+<script>
+const client=window.supabase.createClient(window.SUPABASE_URL,window.SUPABASE_ANON_KEY);
+const msg=document.getElementById('msg');
+function showMsg(t,ok=false){msg.textContent=t;msg.style.color=ok?'#147a3d':'#b42318'}
+function esc(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
+function fmt(v){return v?' '+new Date(v).toLocaleDateString('vi-VN'):'Không hết hạn'}
+async function checkAdmin(){
+ const {data:{user}}=await client.auth.getUser();
+ if(!user){location.href='/auth/login.html';return null}
+ const {data:p,error}=await client.from('profiles').select('email,role').eq('id',user.id).single();
+ if(error||!p||p.role!=='admin'){document.body.innerHTML='<main><div class="card"><h2>Không có quyền truy cập</h2><p>Tài khoản này không phải Admin.</p></div></main>';return null}
+ return user;
+}
+async function loadRows(){
+ const tb=document.getElementById('rows');tb.innerHTML='<tr><td colspan="5">Đang tải...</td></tr>';
+ const {data,error}=await client.from('user_courses').select('user_id,course_id,expires_at,created_at,profiles(email)').order('created_at',{ascending:false});
+ if(error){tb.innerHTML='<tr><td colspan="5">Lỗi: '+esc(error.message)+'</td></tr>';return}
+ if(!data?.length){tb.innerHTML='<tr><td colspan="5">Chưa có quyền nào.</td></tr>';return}
+ tb.innerHTML=data.map(x=>{
+   const active=!x.expires_at||new Date(x.expires_at)>new Date();
+   return `<tr><td>${esc(x.profiles?.email||'(không có email)')}</td><td>${esc(x.course_id.toUpperCase())}</td><td>${fmt(x.expires_at)}</td><td><span class="badge ${active?'ok':'no'}">${active?'Đang hoạt động':'Hết hạn'}</span></td><td><button class="danger" onclick="revoke('${encodeURIComponent(x.profiles?.email||'')}','${x.course_id}')">Thu hồi</button></td></tr>`;
+ }).join('');
+}
+document.getElementById('grant').onclick=async()=>{
+ const email=document.getElementById('email').value.trim(),course=document.getElementById('course').value,date=document.getElementById('expires').value;
+ if(!email){showMsg('Hãy nhập email học viên.');return}
+ showMsg('Đang cấp quyền...',true);
+ const {error}=await client.rpc('admin_grant_course',{p_email:email,p_course_id:course,p_expires_at:date?new Date(date+'T23:59:59').toISOString():null});
+ if(error){showMsg(error.message);return}
+ showMsg('Đã cấp '+course.toUpperCase()+' cho '+email+'.',true);await loadRows();
+};
+window.revoke=async(encoded,course)=>{
+ const email=decodeURIComponent(encoded);if(!confirm('Thu hồi '+course.toUpperCase()+' của '+email+'?'))return;
+ const {error}=await client.rpc('admin_revoke_course',{p_email:email,p_course_id:course});
+ if(error){showMsg(error.message);return}showMsg('Đã thu hồi quyền.',true);await loadRows();
+};
+document.getElementById('refresh').onclick=loadRows;
+document.getElementById('logout').onclick=async()=>{await client.auth.signOut();location.href='/auth/login.html'};
+(async()=>{if(await checkAdmin())await loadRows()})();
+</script>
+</body>
+</html>
